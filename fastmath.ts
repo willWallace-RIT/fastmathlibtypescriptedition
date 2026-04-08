@@ -4,27 +4,35 @@
 
 const PI: number = 3.14159265359;
 
+const buffer = new ArrayBuffer(4);
+const f32 = new Float32Array(buffer);
+const u32 = new Uint32Array(buffer);
+
 export function f2u(x: number): number {
-  const u: number = Number.MAX_SAFE_INTEGER & x;
-  return u;
+  f32[0] = x;
+  return u32[0] >>> 0;
 }
 
 export function u2f(u: number): number {
-  const x: number = u;
-  return x;
+  u32[0] = u >>> 0;
+  return f32[0];
 }
 
 export function fmul_fast(a: number, b: number): number {
-  const ia: number = f2u(a);
-  const ib: number = f2u(b);
-  const uiA = new Uint32Array(1);
-  const uiB = new Uint32Array(1);
-  uiA[0]=0x007FFFFF;
-  uiB[0]=(ia^ib)>>>0; 
-  //return u2f((ia + ib - 0x3F800000) + (((ia ^ ib) & 0x007FFFFFu) >> 4));
-  return u2f((ia + ib - 0x3F800000)>>>0 + ((uiA[0]>>>0 & uiB[0]>>>0) >>> 4));
-}
+  const ia = f2u(a);
+  const ib = f2u(b);
 
+  // exponent approximation
+  let result = (ia + ib - 0x3F800000) >>> 0;
+
+  // mantissa correction (additive, not XOR)
+  const ma = ia & 0x007FFFFF;
+  const mb = ib & 0x007FFFFF;
+
+  const correction = ((ma - mb) >>> 6);
+
+  return u2f((result + correction) >>> 0);
+}
 export function fdiv_fast(a: number, b: number): number {
   const ia: number = f2u(a);
   const ib: number = f2u(b);
@@ -45,14 +53,14 @@ export function finv_fast(x: number): number {
   // mantissa correction (scaled)
   const mant = (ix & 0x007FFFFF) >>> 2;
 
-  return u2f((base>>>0 + mant>>>0) >>> 0);
+  return u2f((base + mant) >>> 0);
 }
 
 export function fsqrt_fast(x: number): number {
   const ix: number = f2u(x);
   const uiA = new Uint32Array(1);
   uiA[0] = 0x007FFFFF;
-  return u2f(((ix >>> 1) + 0x1FC00000)>>>0 + ((ix>>>0 & uiA[0]>>>0) >>> 5));
+  return u2f((((ix >>> 1) + 0x1FC00000)>>>0 + ((ix & uiA[0]) >>> 5))>>>0);
   //return u2f((ix >> 1) + 0x1FC00000 + ((ix & 0x007FFFFFu) >> 5));
 }
 
@@ -66,7 +74,11 @@ export function frsqrt_fast(x: number): number {
 
 export function fcos_fast(x: number): number {
   const x2: number = fmul_fast(x, x);
-  return 1.0 + fmul_fast(x2, (-0.5 + fmul_fast(x2, (0.04166652 + fmul_fast(-0.0013854855, x2)))));
+  const x3: number = (0.04166652 + fmul_fast(-0.0013854855, x2));
+  const x4: number = (-0.5 + fmul_fast(x2, x3 ));
+  console.log("blooboer");
+  return 1.0 + fmul_fast(x2,x4);
+  
   //return 1.0 + x2 * (-0.5 + x2 * (0.04166652 + fmul_fast(-0.0013854855, x2)));
 }
 
